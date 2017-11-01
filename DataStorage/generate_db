@@ -1,0 +1,3 @@
+rm -rf ./db/*
+python dbCreator.py
+mv *.db ./db/
