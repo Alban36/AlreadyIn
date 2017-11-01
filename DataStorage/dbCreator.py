@@ -10,8 +10,7 @@ conn.execute('''CREATE TABLE players (
 #Create teams
 conn.execute('''CREATE TABLE teams (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT,
-		city TEXT)''')
+		name TEXT)''')
 
 #Create game_records
 conn.execute('''CREATE TABLE game_records (
