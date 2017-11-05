@@ -97,7 +97,7 @@ def InsertGame(pGameStruct):
 		#AWAY
 		for lStatsLine in pGameStruct['Record_awayteam']:
                     lPlayerId = InsertPlayer(lStatsLine['Player'],lConn)
-                    lCur.execute("INSERT INTO game_records (game,player,team,SP,FG,FGA,THREEP,THREEPA,FT,FTA,ORB,DRB,AST,STL,BLK,TOV,PF,plusminus) VALUES ("+str(lId)+","+str(lPlayerId)+","+str(lHomeTeamId)+","+lStatsLine['SP']+","+lStatsLine['FG']+","+lStatsLine['FGA']+","+lStatsLine['FG3']+","+lStatsLine['FG3A']+","+lStatsLine['FT']+","+lStatsLine['FTA']+","+lStatsLine['ORB']+","+lStatsLine['DRB']+","+lStatsLine['AST']+","+lStatsLine['STL']+","+lStatsLine['BLK']+","+lStatsLine['TOV']+","+lStatsLine['PF']+","+lStatsLine['PM']+")")
+                    lCur.execute("INSERT INTO game_records (game,player,team,SP,FG,FGA,THREEP,THREEPA,FT,FTA,ORB,DRB,AST,STL,BLK,TOV,PF,plusminus) VALUES ("+str(lId)+","+str(lPlayerId)+","+str(lAwayTeamId)+","+lStatsLine['SP']+","+lStatsLine['FG']+","+lStatsLine['FGA']+","+lStatsLine['FG3']+","+lStatsLine['FG3A']+","+lStatsLine['FT']+","+lStatsLine['FTA']+","+lStatsLine['ORB']+","+lStatsLine['DRB']+","+lStatsLine['AST']+","+lStatsLine['STL']+","+lStatsLine['BLK']+","+lStatsLine['TOV']+","+lStatsLine['PF']+","+lStatsLine['PM']+")")
                 #HOME
                 for lStatsLine in pGameStruct['Record_hometeam']:
                     lPlayerId = InsertPlayer(lStatsLine['Player'],lConn)
