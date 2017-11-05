@@ -15,6 +15,7 @@ conn.execute('''CREATE TABLE teams (
 #Create game_records
 conn.execute('''CREATE TABLE game_records (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		game INTEGER,
 		player INTEGER,
 		team INTEGER,
 		SP INTEGER,
@@ -32,6 +33,7 @@ conn.execute('''CREATE TABLE game_records (
 		TOV INTEGER,
 		PF INTEGER,
 		plusminus INTEGER,
+		FOREIGN KEY(game) REFERENCES games(id)
 		FOREIGN KEY(player) REFERENCES players(id),
 		FOREIGN KEY(team) REFERENCES teams(id))''')
 
@@ -41,9 +43,7 @@ conn.execute('''CREATE TABLE games (
 		date TEXT,
 		home_team INTEGER,
 		visitor_team INTEGER,
-		game_record INTEGER,
 		FOREIGN KEY(home_team) REFERENCES teams(id),
-		FOREIGN KEY(visitor_team) REFERENCES teams(id),
-		FOREIGN KEY(game_record) REFERENCES game_records(id))''')
+		FOREIGN KEY(visitor_team) REFERENCES teams(id))''')
 
 conn.close()
