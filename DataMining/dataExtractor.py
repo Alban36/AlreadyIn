@@ -3,6 +3,7 @@ import urllib2
 import sqlite3
 import re
 import sys
+import os
 from datetime import datetime
 
 gSite = "https://www.basketball-reference.com"
@@ -89,7 +90,7 @@ def InsertGame(pGameStruct):
 	lHomeTeamId = InsertTeam(pGameStruct['HomeTeam'])
 	lAwayTeamId = InsertTeam(pGameStruct['AwayTeam'])
 
-	lIdReq = lCur.execute("SELECT id FROM games WHERE date = ':date' AND home_team=:hometeam AND visitor_team=:awayteam", {"date":pGameStruct['Date'].strftime("%d-%m-%Y"), "hometeam":lHomeTeamId, "awayteam":lAwayTeamId}).fetchone()
+	lIdReq = lCur.execute("SELECT id FROM games WHERE date = '"+pGameStruct['Date'].strftime("%d-%m-%Y")+"' AND home_team="+str(lHomeTeamId)+" AND visitor_team="+str(lAwayTeamId)).fetchone()
 	if lIdReq == None:
                 #insert game
                 lCur.execute("INSERT INTO games (date,home_team,visitor_team) VALUES ('"+pGameStruct['Date'].strftime("%d-%m-%Y")+"',"+str(lHomeTeamId)+","+str(lAwayTeamId)+")")
@@ -107,6 +108,7 @@ def InsertGame(pGameStruct):
                 print("Game added to DB !")
         else:
             lId = lIdReq[0]
+            print "Game already in the DB at id ",lId
 	lConn.close()
 	return lId;
 
@@ -265,6 +267,10 @@ def ExtractGameRecord(BRGameWebPage):
 	print("DONE.")
 	return;
 
+#------#
+# MAIN #
+#------#
+
 lStartTime = datetime.now()
 #Extracting teams if necessary (it shoudln't once done once)
 if gExtractTeams==True:
@@ -272,14 +278,19 @@ if gExtractTeams==True:
 
 #Extracting list of games records pages
 games_pages_list = GetScheduleGamesPages(gSeasonPage)
+lSavePoint = games_pages_list[0]
 
 #Read the save point if existing
-lFile = open("extract.save","r")
-if lFile !=None:
-        print("Extraction save exists! Reading save point ...")
-        lSavePoint = lFile.readline()
-        lSkipping = True
-        print("DONE.")
+lSkipping = False
+try:
+    lFile = open("extract.save","r")
+    if lFile !=None:
+            print("Extraction save exists! Reading save point ...")
+            lSavePoint = lFile.readline()
+            lSkipping = True
+            print("DONE.")
+except IOError:
+    print("No extraction save. start extraction from the beginning.")
 
 for game_page in games_pages_list:
     #Skip game pages until reaching the saved one
