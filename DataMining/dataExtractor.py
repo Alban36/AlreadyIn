@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 import urllib2
 import sqlite3
 import re
+import sys
 from datetime import datetime
 
 gSite = "https://www.basketball-reference.com"
@@ -223,6 +224,8 @@ def ExtractGameRecord(BRGameWebPage):
                             lStatsLineStruct['TOV'] = statsLine.find_all("td", {"data-stat":"tov"})[0].text
                             lStatsLineStruct['PF'] = statsLine.find_all("td", {"data-stat":"pf"})[0].text
                             lStatsLineStruct['PM'] = statsLine.find_all("td", {"data-stat":"plus_minus"})[0].text
+                            if not lStatsLineStruct['PM']:
+                                lStatsLineStruct['PM']="0"
                             lGameStruct['Record_awayteam'].append(lStatsLineStruct)
 	#extract home team stats
 	homeStatsTable = statsTables[2]
@@ -253,6 +256,8 @@ def ExtractGameRecord(BRGameWebPage):
                             lStatsLineStruct['TOV'] = statsLine.find_all("td", {"data-stat":"tov"})[0].text
                             lStatsLineStruct['PF'] = statsLine.find_all("td", {"data-stat":"pf"})[0].text
                             lStatsLineStruct['PM'] = statsLine.find_all("td", {"data-stat":"plus_minus"})[0].text
+                            if not lStatsLineStruct['PM']:
+                                lStatsLineStruct['PM']="0"
                             lGameStruct['Record_hometeam'].append(lStatsLineStruct)
         #Insert data in DB if not existing
         InsertGame(lGameStruct)
@@ -265,16 +270,49 @@ lStartTime = datetime.now()
 if gExtractTeams==True:
 	ExtractTeams(gTeamsPage)
 
+#Extracting list of games records pages
 games_pages_list = GetScheduleGamesPages(gSeasonPage)
+
+#Read the save point if existing
+lFile = open("extract.save","r")
+if lFile !=None:
+        print("Extraction save exists! Reading save point ...")
+        lSavePoint = lFile.readline()
+        lSkipping = True
+        print("DONE.")
+
 for game_page in games_pages_list:
-	ExtractGameRecord(game_page)
-#ExtractGameRecord("https://www.basketball-reference.com/boxscores/201610250POR.html")
+    #Skip game pages until reaching the saved one
+    if game_page == lSavePoint:
+        lSkipping = False
+    
+    if lSkipping == False:
+        try:
+            ExtractGameRecord(game_page)
+        except:
+            print("Unexpected error:", sys.exc_info()[0])
+            print("Saving last game extracted")
+            lFile = open("extract.save","w")
+            lFile.write(game_page)
+            lFile.close()
+            break
+    else:
+        print("Skipping game record "+game_page+"...")
+
+#if all games were skipped then delete the save point as it must be corrupted
+if lSkipping == True:
+    print("Error: all games were skipped. Removing save point...")
+    os.remove("extract.save")
+    print("DONE.")
+
+
+#ExtractGameRecord("https://www.basketball-reference.com/boxscores/201704040IND.html")
 
 lStopTime = datetime.now()
-
 lDeltaTime = lStopTime - lStartTime
-
 print(lDeltaTime)
+
+print("END OF PROGRAM")
 
 #game struct exemple
 lGameStruct = {
