@@ -1,103 +1,111 @@
 from bs4 import BeautifulSoup
-import urllib2
+import urllib.request
 import sqlite3
 import re
 import sys
 import os
-from datetime import datetime
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
-gSite = "https://www.basketball-reference.com"
-gSeasonPage = gSite + "/leagues/NBA_2017_games.html"
-gTeamsPage = gSite + "/teams/"
+from datetime import datetime
+from time import sleep
+
+gSite = "http://stats.nba.com/game/"
+gStartGame = "0021600001"
+gEndGame = "0021601230"
 
 gDB = "../DataStorage/db/data.db"
 
 gExtractTeams = True;
 
 #Retrieve the web pages containing the games records of the entire season schedule
+#OBSOLETE
 def GetScheduleGamesPages(BRSeasonWebPage):
-	print("Extracting games pages links ...")
-	results = []
+        print("Extracting games pages links ...")
+        results = []
 
-	req = urllib2.Request(BRSeasonWebPage)
-	resp = urllib2.urlopen(req)
-	page = resp.read()
+        req = urllib2.Request(BRSeasonWebPage)
+        resp = urllib2.urlopen(req)
+        page = resp.read()
 
-	soup = BeautifulSoup(page,"lxml")
-	schedule_pages = soup.find_all("div", class_="filter")
+        soup = BeautifulSoup(page,"lxml")
+        schedule_pages = soup.find_all("div", class_="filter")
 
-	links = schedule_pages[0].find_all("a")
+        links = schedule_pages[0].find_all("a")
 
-	for link in links:
-		scheduleLink = gSite + link["href"]
-		schedulePage = urllib2.urlopen(scheduleLink)
-		soup2 = BeautifulSoup(schedulePage,"lxml")
-		gamePages = soup2.find_all("table", {"id":"schedule"})
-		for temp in gamePages[0].find_all("a"):
-			if temp.string == "Box Score":
-				results.append(gSite + temp["href"])
-	print("DONE.")
-	return results;
+        for link in links:
+                scheduleLink = gSite + link["href"]
+                schedulePage = urllib2.urlopen(scheduleLink)
+                soup2 = BeautifulSoup(schedulePage,"lxml")
+                gamePages = soup2.find_all("table", {"id":"schedule"})
+                for temp in gamePages[0].find_all("a"):
+                        if temp.string == "Box Score":
+                                results.append(gSite + temp["href"])
+        print("DONE.")
+        return results;
 
 #Insert a new team into the DB if not existing
 def InsertTeam(teamName):
-	lId = -1
-	lConn = sqlite3.connect(gDB)
-	lCur = lConn.cursor()
-
+        lId = -1
+        lConn = sqlite3.connect(gDB)
+        lCur = lConn.cursor()
+        
         lIdReq = "SELECT id FROM teams WHERE name = '"+teamName+"'"
-	lCur.execute(lIdReq)
-	lCurResp = lCur.fetchone()
-	if lCurResp == None:
-		lCur.execute("INSERT INTO teams (name) VALUES ('"+teamName+"')")
-		lConn.commit()
-		lCur.execute(lIdReq)
-		lId = lCur.fetchone()[0]
+        lCur.execute(lIdReq)
+        lCurResp = lCur.fetchone()
+        if lCurResp == None:
+                lCur.execute("INSERT INTO teams (name) VALUES ('"+teamName+"')")
+                lConn.commit()
+                lCur.execute(lIdReq)
+                lId = lCur.fetchone()[0]
         else:
             lId = lCurResp[0] 
-	lConn.close()
-	return lId;
+        lConn.close()
+        return lId;
 
 #Insert a new player into the DB if not existing
 def InsertPlayer(pPlayerName,pConn):
-	lId = -1
-	if pConn==None:
+        lId = -1
+        if pConn==None:
             lConn = sqlite3.connect(gDB)
         else:
             lConn = pConn
-	lCur = lConn.cursor()
+        lCur = lConn.cursor()
 
         lIdReq = 'SELECT id FROM players WHERE name = "'+pPlayerName+'"'
-	lCur.execute(lIdReq)
-	lCurResp = lCur.fetchone()
-	if lCurResp == None:
-		lCur.execute('INSERT INTO players (name) VALUES ("'+pPlayerName+'")')
-		lConn.commit()
-		lCur.execute(lIdReq)
-		lId = lCur.fetchone()[0]
+        lCur.execute(lIdReq)
+        lCurResp = lCur.fetchone()
+        if lCurResp == None:
+                lCur.execute('INSERT INTO players (name) VALUES ("'+pPlayerName+'")')
+                lConn.commit()
+                lCur.execute(lIdReq)
+                lId = lCur.fetchone()[0]
         else:
             lId = lCurResp[0]
         if pConn==None:
             lConn.close()
-	return lId;
+        return lId;
 
 #Insert a new game into the DB if not existing
 def InsertGame(pGameStruct):
-	lId = -1
-	lConn = sqlite3.connect(gDB)
-	lCur = lConn.cursor()
-	
-	lHomeTeamId = InsertTeam(pGameStruct['HomeTeam'])
-	lAwayTeamId = InsertTeam(pGameStruct['AwayTeam'])
+        lId = -1
+        lConn = sqlite3.connect(gDB)
+        lCur = lConn.cursor()
+        
+        lHomeTeamId = InsertTeam(pGameStruct['HomeTeam'])
+        lAwayTeamId = InsertTeam(pGameStruct['AwayTeam'])
 
-	lIdReq = lCur.execute("SELECT id FROM games WHERE date = '"+pGameStruct['Date'].strftime("%d-%m-%Y")+"' AND home_team="+str(lHomeTeamId)+" AND visitor_team="+str(lAwayTeamId)).fetchone()
-	if lIdReq == None:
+        lIdReq = lCur.execute("SELECT id FROM games WHERE date = '"+pGameStruct['Date'].strftime("%d-%m-%Y")+"' AND home_team="+str(lHomeTeamId)+" AND visitor_team="+str(lAwayTeamId)).fetchone()
+        if lIdReq == None:
                 #insert game
                 lCur.execute("INSERT INTO games (date,home_team,visitor_team) VALUES ('"+pGameStruct['Date'].strftime("%d-%m-%Y")+"',"+str(lHomeTeamId)+","+str(lAwayTeamId)+")")
                 lId = lCur.execute("SELECT id FROM games WHERE date = :date AND home_team=:hometeam AND visitor_team=:awayteam", {"date":pGameStruct['Date'].strftime("%d-%m-%Y"), "hometeam":lHomeTeamId, "awayteam":lAwayTeamId}).fetchone()[0]
-		#insert game record
-		#AWAY
-		for lStatsLine in pGameStruct['Record_awayteam']:
+                #insert game record
+                #AWAY
+                for lStatsLine in pGameStruct['Record_awayteam']:
                     lPlayerId = InsertPlayer(lStatsLine['Player'],lConn)
                     lCur.execute("INSERT INTO game_records (game,player,team,SP,FG,FGA,THREEP,THREEPA,FT,FTA,ORB,DRB,AST,STL,BLK,TOV,PF,plusminus) VALUES ("+str(lId)+","+str(lPlayerId)+","+str(lAwayTeamId)+","+lStatsLine['SP']+","+lStatsLine['FG']+","+lStatsLine['FGA']+","+lStatsLine['FG3']+","+lStatsLine['FG3A']+","+lStatsLine['FT']+","+lStatsLine['FTA']+","+lStatsLine['ORB']+","+lStatsLine['DRB']+","+lStatsLine['AST']+","+lStatsLine['STL']+","+lStatsLine['BLK']+","+lStatsLine['TOV']+","+lStatsLine['PF']+","+lStatsLine['PM']+")")
                 #HOME
@@ -108,177 +116,204 @@ def InsertGame(pGameStruct):
                 print("Game added to DB !")
         else:
             lId = lIdReq[0]
-            print "Game already in the DB at id ",lId
-	lConn.close()
-	return lId;
+            print("Game already in the DB at id "+str(lId))
+        lConn.close()
+        return lId;
 
 
 #Read the list of the team from the teams page of BR and insert them if necessary into the DB
+#OBSOLETE
 def ExtractTeams(BRTeamsWebPage):
         print("Extracting teams data ...")
-	req = urllib2.Request(BRTeamsWebPage)
-	resp = urllib2.urlopen(req)
-	page = resp.read()
+        req = urllib2.Request(BRTeamsWebPage)
+        resp = urllib2.urlopen(req)
+        page = resp.read()
 
-	soup = BeautifulSoup(page,"lxml")
-	activeTeams = soup.find_all("table", {"id":"teams_active"})
-	currentTeams = activeTeams[0].find_all("tr", class_="full_table")
-	for team in currentTeams:
-		#insert into db
-		lTeamId = InsertTeam(team.find_all("a")[0].string)
+        soup = BeautifulSoup(page,"lxml")
+        activeTeams = soup.find_all("table", {"id":"teams_active"})
+        currentTeams = activeTeams[0].find_all("tr", class_="full_table")
+        for team in currentTeams:
+                #insert into db
+                lTeamId = InsertTeam(team.find_all("a")[0].string)
         print("DONE.")
-	return;
+        return;
 
 #Convert a word date to date type
 def StrToDate(value):
-	tokens = re.findall(r"[\w']+",value)
+        tokens = re.findall(r"[\w']+",value)
+        
+        print(tokens)
 
-	month = tokens[0];
-	if month.lower() == "january":
-		month = "01"
-	elif month.lower() == "february": 
-		month = "02"
-	elif month.lower() == "march": 
-		month = "03"
-	elif month.lower() == "april": 
-		month = "04"
-	elif month.lower() == "may": 
-		month = "05"
-	elif month.lower() == "june": 
-		month = "06"
-	elif month.lower() == "july": 
-		month = "07"
-	elif month.lower() == "august": 
-		month = "08"
-	elif month.lower() == "september": 
-		month = "09"
-	elif month.lower() == "october": 
-		month = "10"
-	elif month.lower() == "november": 
-		month = "11"
-	elif month.lower() == "december": 
-		month = "12"
+        month = tokens[0];
+        if month.lower() == "january":
+                month = "01"
+        elif month.lower() == "february": 
+                month = "02"
+        elif month.lower() == "march": 
+                month = "03"
+        elif month.lower() == "april": 
+                month = "04"
+        elif month.lower() == "may": 
+                month = "05"
+        elif month.lower() == "june": 
+                month = "06"
+        elif month.lower() == "july": 
+                month = "07"
+        elif month.lower() == "august": 
+                month = "08"
+        elif month.lower() == "september": 
+                month = "09"
+        elif month.lower() == "october": 
+                month = "10"
+        elif month.lower() == "november": 
+                month = "11"
+        elif month.lower() == "december": 
+                month = "12"
 
-	return datetime.strptime(tokens[2]+' '+tokens[1]+' '+month,'%Y %d %m');
+        return datetime.strptime(tokens[2]+' '+tokens[1]+' '+month,'%Y %d %m');
 
 #Extract the games data and games records and store them in the db
 def ExtractGameRecord(BRGameWebPage):
-	lGameStruct = {};
+        lGameStruct = {};
 
-	print("Extracting game record for page "+BRGameWebPage+" ...")
+        print("Extracting game record for page "+BRGameWebPage+" ...")
 
-        req = urllib2.Request(BRGameWebPage)
-        resp = urllib2.urlopen(req)
-	page = resp.read()
+        lDriver = webdriver.Firefox()
+        lDriver.minimize_window()
+        lDriver.get(BRGameWebPage)
+        try:
+            WebDriverWait(lDriver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@class="nba-stat-table__overflow"]'))
+)
+        except:
+            print("WebDriverWait error:", sys.exc_info()[0])
+            
+        lPage = lDriver.page_source
+        lDriver.quit()
 
-	if not page:
-		print("Error : webpage "+BRGameWebPage+" is empty. Data cannot be extracted.")	
-		return;
+        if not lPage:
+                print("Error : webpage "+BRGameWebPage+" is empty. Data cannot be extracted.")        
+                return;
 
-	#extract game information (home team, away team and date)
-	soup = BeautifulSoup(page,"lxml")
+        #extract game information (home team, away team and date)
+        soup = BeautifulSoup(lPage,"lxml")
 
-	description = soup.find_all("meta", {"name":"Description"})
-	if description != None:
-		#here extract from description the home team, the away team and the date
-		text = description[0]["content"]
-		fp = text.find(" (");
-		vs = text.find("vs. ");
-		lp = text.rfind(" (");
-		lt = text.rfind("- ");	
+        description = soup.find_all("meta", {"name":"description"})
+        if description != None:
+                #here extract from description the home team, the away team and the date
+                text = description[0]["content"]
+                print(text)
+                startIndex1 = len("NBA Stats Official Boxscore for ")
+                endIndex1 = text.find(" @");
+                startIndex2 = endIndex1+3
+                endIndex2 = text.find(" on");
+                startIndex3 = text.find(", ")+2;
 
-		#Description data here
-		lGameStruct['AwayTeam'] = text[12:fp]
-		lGameStruct['HomeTeam'] = text[vs+4:lp]
-		lGameStruct['Date'] = StrToDate(text[lt+2:])
-	else:
-		print("Error: could not find game description")
-	
-	#extract game record
-	statsTables = soup.find_all("tbody")
-	
-	#extract away team stats
-	awayStatsTable = statsTables[0]
-	
-	lGameStruct['Record_awayteam']=[]
-	statsLines = awayStatsTable.find_all("tr")
-	for statsLine in statsLines:
-		if statsLine.has_attr("class") == False:
-                        if not statsLine.find_all("td", {"data-stat":"reason"}):
-                            lStatsLineStruct = {}
-                            lStatsLineStruct['Player'] = statsLine.find_all("a")[0].text
-                            #convert minutes to seconds
-                            lMPStr = statsLine.find_all("td", {"data-stat":"mp"})[0].text
-                            lMPTokens = lMPStr.split(':')
-                            lSP = int(lMPTokens[0])*60 + int(lMPTokens[1])
-                            lStatsLineStruct['SP'] = str(lSP)
-                            lStatsLineStruct['FG'] = statsLine.find_all("td", {"data-stat":"fg"})[0].text
-                            lStatsLineStruct['FGA'] = statsLine.find_all("td", {"data-stat":"fga"})[0].text
-                            lStatsLineStruct['FG3'] = statsLine.find_all("td", {"data-stat":"fg3"})[0].text
-                            lStatsLineStruct['FG3A'] = statsLine.find_all("td", {"data-stat":"fg3a"})[0].text
-                            lStatsLineStruct['FT'] = statsLine.find_all("td", {"data-stat":"ft"})[0].text
-                            lStatsLineStruct['FTA'] = statsLine.find_all("td", {"data-stat":"fta"})[0].text
-                            lStatsLineStruct['ORB'] = statsLine.find_all("td", {"data-stat":"orb"})[0].text
-                            lStatsLineStruct['DRB'] = statsLine.find_all("td", {"data-stat":"drb"})[0].text
-                            lStatsLineStruct['AST'] = statsLine.find_all("td", {"data-stat":"ast"})[0].text
-                            lStatsLineStruct['STL'] = statsLine.find_all("td", {"data-stat":"stl"})[0].text
-                            lStatsLineStruct['BLK'] = statsLine.find_all("td", {"data-stat":"blk"})[0].text
-                            lStatsLineStruct['TOV'] = statsLine.find_all("td", {"data-stat":"tov"})[0].text
-                            lStatsLineStruct['PF'] = statsLine.find_all("td", {"data-stat":"pf"})[0].text
-                            lStatsLineStruct['PM'] = statsLine.find_all("td", {"data-stat":"plus_minus"})[0].text
-                            if not lStatsLineStruct['PM']:
-                                lStatsLineStruct['PM']="0"
-                            lGameStruct['Record_awayteam'].append(lStatsLineStruct)
-	#extract home team stats
-	homeStatsTable = statsTables[2]
-	
-	lGameStruct['Record_hometeam']=[]
-	statsLines = homeStatsTable.find_all("tr")
-	for statsLine in statsLines:
-		if statsLine.has_attr("class") == False:
-                        if not statsLine.find_all("td", {"data-stat":"reason"}):
-                            lStatsLineStruct = {}
-                            lStatsLineStruct['Player'] = statsLine.find_all("a")[0].text
-                            #convert minutes to seconds
-                            lMPStr = statsLine.find_all("td", {"data-stat":"mp"})[0].text
-                            lMPTokens = lMPStr.split(':')
-                            lSP = int(lMPTokens[0])*60 + int(lMPTokens[1])
-                            lStatsLineStruct['SP'] = str(lSP)
-                            lStatsLineStruct['FG'] = statsLine.find_all("td", {"data-stat":"fg"})[0].text
-                            lStatsLineStruct['FGA'] = statsLine.find_all("td", {"data-stat":"fga"})[0].text
-                            lStatsLineStruct['FG3'] = statsLine.find_all("td", {"data-stat":"fg3"})[0].text
-                            lStatsLineStruct['FG3A'] = statsLine.find_all("td", {"data-stat":"fg3a"})[0].text
-                            lStatsLineStruct['FT'] = statsLine.find_all("td", {"data-stat":"ft"})[0].text
-                            lStatsLineStruct['FTA'] = statsLine.find_all("td", {"data-stat":"fta"})[0].text
-                            lStatsLineStruct['ORB'] = statsLine.find_all("td", {"data-stat":"orb"})[0].text
-                            lStatsLineStruct['DRB'] = statsLine.find_all("td", {"data-stat":"drb"})[0].text
-                            lStatsLineStruct['AST'] = statsLine.find_all("td", {"data-stat":"ast"})[0].text
-                            lStatsLineStruct['STL'] = statsLine.find_all("td", {"data-stat":"stl"})[0].text
-                            lStatsLineStruct['BLK'] = statsLine.find_all("td", {"data-stat":"blk"})[0].text
-                            lStatsLineStruct['TOV'] = statsLine.find_all("td", {"data-stat":"tov"})[0].text
-                            lStatsLineStruct['PF'] = statsLine.find_all("td", {"data-stat":"pf"})[0].text
-                            lStatsLineStruct['PM'] = statsLine.find_all("td", {"data-stat":"plus_minus"})[0].text
-                            if not lStatsLineStruct['PM']:
-                                lStatsLineStruct['PM']="0"
-                            lGameStruct['Record_hometeam'].append(lStatsLineStruct)
+                #Description data here
+                lGameStruct['AwayTeam'] = text[startIndex1:endIndex1]
+                lGameStruct['HomeTeam'] = text[startIndex2:endIndex2]
+                lGameStruct['Date'] = StrToDate(text[startIndex3:])
+                
+                #print(lGameStruct['AwayTeam'])
+                #print(lGameStruct['HomeTeam'])
+                #print(lGameStruct['Date'])
+        else:
+                print("Error: could not find game description")
+        
+        #extract game record
+        statsTables = soup.find_all("div",{"class":"nba-stat-table__overflow"})
+        
+        #extract away team stats
+        awayStatsTable = statsTables[0]
+        
+        lGameStruct['Record_awayteam']=[]
+        statsLines = awayStatsTable.find_all("tbody")[0].find_all("tr")
+        for statsLine in statsLines:
+            lStatsLineStruct = {}
+            if not statsLine.find_all("td",{"class":"dnp"}):
+                lFields = statsLine.find_all("td")
+                lTemp = lFields[0].find_all("a")[0].text
+                endIndex = lTemp.find(" <sup>")
+                lStatsLineStruct['Player'] = lTemp[:endIndex]
+                #convert minutes to seconds
+                lMPStr = lFields[1].text
+                lMPTokens = lMPStr.split(':')
+                lSP = int(lMPTokens[0])*60 + int(lMPTokens[1])
+                lStatsLineStruct['SP'] = str(lSP)
+                lStatsLineStruct['FG'] = lFields[2].text
+                lStatsLineStruct['FGA'] = lFields[3].text
+                lStatsLineStruct['FG3'] = lFields[5].text
+                lStatsLineStruct['FG3A'] = lFields[6].text
+                lStatsLineStruct['FT'] = lFields[8].text
+                lStatsLineStruct['FTA'] = lFields[9].text
+                lStatsLineStruct['ORB'] = lFields[11].text
+                lStatsLineStruct['DRB'] = lFields[12].text
+                lStatsLineStruct['AST'] = lFields[14].text
+                lStatsLineStruct['TOV'] = lFields[15].text
+                lStatsLineStruct['STL'] = lFields[16].text
+                lStatsLineStruct['BLK'] = lFields[17].text
+                lStatsLineStruct['PF'] = lFields[18].text
+                lStatsLineStruct['PM'] = lFields[19].text
+                if not lStatsLineStruct['PM']:
+                    lStatsLineStruct['PM']="0"
+                lGameStruct['Record_awayteam'].append(lStatsLineStruct)
+            
+        #extract home team stats
+        homeStatsTable = statsTables[1]
+        
+        lGameStruct['Record_hometeam']=[]
+        statsLines = homeStatsTable.find_all("tbody")[0].find_all("tr")
+        for statsLine in statsLines:
+            if not statsLine.find_all("td",{"class":"dnp"}):
+                lStatsLineStruct = {}
+                lFields = statsLine.find_all("td")
+                lTemp = lFields[0].find_all("a")[0].text
+                endIndex = lTemp.find(" <sup>")
+                lStatsLineStruct['Player'] = lTemp[:endIndex]
+                #convert minutes to seconds
+                lMPStr = lFields[1].text
+                lMPTokens = lMPStr.split(':')
+                lSP = int(lMPTokens[0])*60 + int(lMPTokens[1])
+                lStatsLineStruct['SP'] = str(lSP)
+                lStatsLineStruct['FG'] = lFields[2].text
+                lStatsLineStruct['FGA'] = lFields[3].text
+                lStatsLineStruct['FG3'] = lFields[5].text
+                lStatsLineStruct['FG3A'] = lFields[6].text
+                lStatsLineStruct['FT'] = lFields[8].text
+                lStatsLineStruct['FTA'] = lFields[9].text
+                lStatsLineStruct['ORB'] = lFields[11].text
+                lStatsLineStruct['DRB'] = lFields[12].text
+                lStatsLineStruct['AST'] = lFields[14].text
+                lStatsLineStruct['TOV'] = lFields[15].text
+                lStatsLineStruct['STL'] = lFields[16].text
+                lStatsLineStruct['BLK'] = lFields[17].text
+                lStatsLineStruct['PF'] = lFields[18].text
+                lStatsLineStruct['PM'] = lFields[19].text
+                if not lStatsLineStruct['PM']:
+                    lStatsLineStruct['PM']="0"
+                lGameStruct['Record_hometeam'].append(lStatsLineStruct)
+            
         #Insert data in DB if not existing
         InsertGame(lGameStruct)
-	
-	print("DONE.")
-	return;
+        
+        print("DONE.")
+        return;
+
+
+#------#
+# test #
+#------#
+#ExtractGameRecord('http://stats.nba.com/game/0021600005/')
+
+#exit()
 
 #------#
 # MAIN #
 #------#
 
 lStartTime = datetime.now()
-#Extracting teams if necessary (it shoudln't once done once)
-if gExtractTeams==True:
-	ExtractTeams(gTeamsPage)
 
-#Extracting list of games records pages
-games_pages_list = GetScheduleGamesPages(gSeasonPage)
-lSavePoint = games_pages_list[0]
+#Initial SavePoint
+lSavePoint = gStartGame
 
 #Read the save point if existing
 lSkipping = False
@@ -287,35 +322,30 @@ try:
     if lFile !=None:
             print("Extraction save exists! Reading save point ...")
             lSavePoint = lFile.readline()
-            lSkipping = True
             print("DONE.")
 except IOError:
     print("No extraction save. start extraction from the beginning.")
 
-for game_page in games_pages_list:
-    #Skip game pages until reaching the saved one
-    if game_page == lSavePoint:
-        lSkipping = False
+lGame = int(lSavePoint)
+lRetry = 0
+while lSavePoint != gEndGame:
     
-    if lSkipping == False:
-        try:
-            ExtractGameRecord(game_page)
-        except:
+    try:
+        ExtractGameRecord(gSite+str(lSavePoint)+"/")
+        lGame += 1
+        lSavePoint = str(lGame).zfill(10)
+        lRetry = 0
+    except:
+        lRetry += 1
+        if lRetry == 4:
             print("Unexpected error:", sys.exc_info()[0])
             print("Saving last game extracted")
             lFile = open("extract.save","w")
-            lFile.write(game_page)
+            lFile.write(lSavePoint)
             lFile.close()
             break
-    else:
-        print("Skipping game record "+game_page+"...")
-
-#if all games were skipped then delete the save point as it must be corrupted
-if lSkipping == True:
-    print("Error: all games were skipped. Removing save point...")
-    os.remove("extract.save")
-    print("DONE.")
-
+        else:
+            print("Game extraction failed. Retry = "+str(lRetry))
 
 #ExtractGameRecord("https://www.basketball-reference.com/boxscores/201704040IND.html")
 
@@ -324,46 +354,3 @@ lDeltaTime = lStopTime - lStartTime
 print(lDeltaTime)
 
 print("END OF PROGRAM")
-
-#game struct exemple
-lGameStruct = {
-	'Date':datetime.now(),
-	'HomeTeam':'Atlanta Hawks',
-	'AwayTeam':'Boston Celtics',
-	'Record':[
-		{
-			'Player':'Toto',
-			'sp':48*60,
-			'fg':10,
-			'fga':20,
-			'fg3':0,
-			'fg3a':2,
-			'ft':2,
-			'fta':2,
-			'orb':0,
-			'drb':4,
-			'ast':3,
-			'stl':1,
-			'tov':1,
-			'blk':0,
-			'pf':4,
-			'pm':6
-		},
-		{
-			'Player':'Tata',
-			'sp':12*60,
-			'fg':1,
-			'fga':9,
-			'fg3':0,
-			'fg3a':1,
-			'ft':2,
-			'fta':2,
-			'orb':0,
-			'drb':2,
-			'ast':1,
-			'stl':0,
-			'tov':2,
-			'blk':0,
-			'pf':2,
-			'pm':-3
-		}]}
