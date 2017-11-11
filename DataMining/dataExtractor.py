@@ -1,51 +1,19 @@
 from bs4 import BeautifulSoup
-import urllib.request
 import sqlite3
 import re
 import sys
-import os
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
 from datetime import datetime
-from time import sleep
 
 gSite = "http://stats.nba.com/game/"
 gStartGame = "0021600001"
 gEndGame = "0021601230"
 
 gDB = "../DataStorage/db/data.db"
-
-gExtractTeams = True;
-
-#Retrieve the web pages containing the games records of the entire season schedule
-#OBSOLETE
-def GetScheduleGamesPages(BRSeasonWebPage):
-        print("Extracting games pages links ...")
-        results = []
-
-        req = urllib2.Request(BRSeasonWebPage)
-        resp = urllib2.urlopen(req)
-        page = resp.read()
-
-        soup = BeautifulSoup(page,"lxml")
-        schedule_pages = soup.find_all("div", class_="filter")
-
-        links = schedule_pages[0].find_all("a")
-
-        for link in links:
-                scheduleLink = gSite + link["href"]
-                schedulePage = urllib2.urlopen(scheduleLink)
-                soup2 = BeautifulSoup(schedulePage,"lxml")
-                gamePages = soup2.find_all("table", {"id":"schedule"})
-                for temp in gamePages[0].find_all("a"):
-                        if temp.string == "Box Score":
-                                results.append(gSite + temp["href"])
-        print("DONE.")
-        return results;
 
 #Insert a new team into the DB if not existing
 def InsertTeam(teamName):
@@ -119,24 +87,6 @@ def InsertGame(pGameStruct):
             print("Game already in the DB at id "+str(lId))
         lConn.close()
         return lId;
-
-
-#Read the list of the team from the teams page of BR and insert them if necessary into the DB
-#OBSOLETE
-def ExtractTeams(BRTeamsWebPage):
-        print("Extracting teams data ...")
-        req = urllib2.Request(BRTeamsWebPage)
-        resp = urllib2.urlopen(req)
-        page = resp.read()
-
-        soup = BeautifulSoup(page,"lxml")
-        activeTeams = soup.find_all("table", {"id":"teams_active"})
-        currentTeams = activeTeams[0].find_all("tr", class_="full_table")
-        for team in currentTeams:
-                #insert into db
-                lTeamId = InsertTeam(team.find_all("a")[0].string)
-        print("DONE.")
-        return;
 
 #Convert a word date to date type
 def StrToDate(value):
