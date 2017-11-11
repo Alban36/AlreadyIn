@@ -1,1 +1,1 @@
-python ./dataExtractor.py
+python3 ./dataExtractor.py
